@@ -8,7 +8,8 @@ log4javascript.setEnabled(true);
 //log4javascript.setEnabled(false);
 
 function mapImgUrl(house) {
-    return BASEIMGURL + house.image;
+    //return BASEIMGURL + house.image;
+    return house.image;
 }
 
 function addHover(house, row, marker) {
@@ -76,7 +77,11 @@ function initialize() {
  	$.storage = new $.store();
     for (var i in listings) {
         house = listings[i];
-        latlng = new google.maps.LatLng(house.latlng.lat, house.latlng.lng);
+        if (house.latlng == undefined) {
+            latlng = undefined;
+        } else {
+            latlng = new google.maps.LatLng(house.latlng.lat, house.latlng.lng);
+        }
         title = house.listing_text;
         var marker = new google.maps.Marker({
             icon: BLUE_ICON, 
