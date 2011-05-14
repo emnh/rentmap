@@ -22,7 +22,10 @@ from hybel import ApartmentAd, ApartmentEncoder, updateFromHybelNo
 from pprint import pprint, pformat
 from BeautifulSoup import BeautifulSoup, NavigableString
 from google.appengine.ext import webapp
-from google.appengine.ext import deferred
+try:
+    from google.appengine.ext import deferred
+except:
+    pass
 from google.appengine.ext import db
 from google.appengine.api import memcache
 from google.appengine.ext.webapp import template
@@ -41,6 +44,7 @@ class ListingsDebug(webapp.RequestHandler):
         for ad in ApartmentAd.all():
             json = ApartmentEncoder().encode(ad)
             self.response.out.write(json)
+            self.response.out.write(ad.html_content)
             self.response.out.write('\n\n')
 
 
@@ -64,7 +68,8 @@ class ApartmentListings(webapp.RequestHandler):
 
 class UpdatePage(webapp.RequestHandler):
     def get(self):
-        deferred.defer(updateFromHybelNo)
+        #deferred.defer(updateFromHybelNo)
+        updateFromHybelNo()
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.out.write('Update scheduled')
 

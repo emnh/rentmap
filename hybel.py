@@ -36,6 +36,7 @@ class OverLimitException(Exception):
 
 class ApartmentAd(db.Model):
     address = db.PostalAddressProperty()
+    address_urlquoted = db.PostalAddressProperty()
     apartment_type = db.StringProperty()
     created = db.DateProperty()
     distance_text = db.StringProperty()
@@ -52,7 +53,7 @@ class ApartmentAd(db.Model):
 
     def dirCode(self, destination_address):
         if self.address:
-            data = GeoCoder.dirCode(self.address, destination_address)
+            data = GeoCoder.dirCode(self.address_urlquoted, destination_address)
             if data:
                 if len(data['routes']) > 0:
                     leg = data['routes'][0]['legs'][0]
@@ -115,7 +116,8 @@ class GeoCoder(object):
 
     @staticmethod
     def directionsURL(start_address, destination_address):
-        origin = urllib.quote_plus(start_address.encode('utf-8'))
+        #origin = urllib.quote_plus(start_address.encode('utf-8'))
+        origin = start_address
         destination = urllib.quote_plus(destination_address.encode('utf-8'))
         url = 'http://maps.googleapis.com/maps/api/directions/json?origin=%s&destination=%s&mode=walking&sensor=false' \
                 % (origin, destination)
@@ -126,9 +128,9 @@ class GeoCoder(object):
         # if cached
         cached_data = cache_model.get_by_key_name(url)
         if cached_data:
-            logging.debug('Read cached URL: %s' % url)
+            logging.info('Read cached URL: %s' % url)
         else:
-            logging.debug('Downloading URL: %s' % url)
+            logging.info('Downloading URL: %s' % url)
             fd = urllib.urlopen(url)
             data = fd.read()
             fd.close()
@@ -164,7 +166,7 @@ class HybelNoParser(object):
         if url:
             match = re.search(r'geo_area=(.*)&sourceid', url)
             if match:
-                return urllib.unquote_plus(match.group(1))
+                return match.group(1)
 
     @staticmethod
     def parseAddress2(souphouse):
@@ -179,9 +181,7 @@ class HybelNoParser(object):
         return address
 
     @staticmethod
-    def parseApartmentAd(souphouse):
-        ad_id = souphouse['id']
-        h = ApartmentAd(key_name=ad_id)
+    def parseApartmentAd(h, souphouse):
         image = souphouse.find('img')
         if image != -1:
             h.image = HybelNoParser.BaseURL + image['src']
@@ -192,7 +192,8 @@ class HybelNoParser(object):
         h.listing_text = link.string
         h.url = HybelNoParser.BaseURL + link['href']
         h.price = int(souphouse.find('div', 'price').strong.string.replace(',-', ''))
-        h.address = HybelNoParser.parseAddress(souphouse)
+        h.address_urlquoted = HybelNoParser.parseAddress(souphouse)
+        h.address = urllib.unquote_plus(h.address_urlquoted)
         h.apartment_type = str(souphouse.find('div', 'house').strong.string)
         date = souphouse.find('div', 'created').string.strip()
         h.created = datetime.datetime.strptime(date, '%d.%m.%Y').date()
@@ -218,10 +219,23 @@ def updateFromHybelNo():
         fd.close()
         memcache.add(url, data, 300)
 
+    # clear
+    #for h in ApartmentAd.all():
+    #    h.delete()
+    #return
+
+    # get only new
     for soup_ad in HybelNoParser.getApartmentAds(data):
         logging.info("Processing ad with id %s" % soup_ad['id'])
-        ad = HybelNoParser.parseApartmentAd(soup_ad)
-        ad.put()
+        h = ApartmentAd(key_name=soup_ad['id'])
+        h.html_content = soup_ad.renderContents()
+        h.put()
+
+    # but parse all
+    # TODO: if DEV or if UPGRADE
+    for h in ApartmentAd.all():
+        soup_ad = BeautifulSoup(h.html_content, convertEntities=BeautifulSoup.ALL_ENTITIES)
+        ad = HybelNoParser.parseApartmentAd(h, soup_ad)
         ad.dirCode(DESTINATION)
         ad.put()
 

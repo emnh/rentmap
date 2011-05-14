@@ -13,18 +13,18 @@ function mapImgUrl(house) {
 }
 
 function addHover(house, row, marker) {
-   log.debug('Add hover', row.attr('id'), marker.getTitle());
-   row.find('td').addClass('hover');
-   marker.setAnimation(google.maps.Animation.BOUNCE);
-   marker.setIcon(GREEN_ICON);
-   $("#apt_img").attr('src', mapImgUrl(house));
+    log.debug('Add hover', row.attr('id'), marker.getTitle());
+    row.find('td').addClass('hover');
+    marker.setAnimation(google.maps.Animation.BOUNCE);
+    marker.setIcon(GREEN_ICON);
+    $("#apt_img").attr('src', mapImgUrl(house));
 }
 
 function removeHover(house, row, marker) {
-   log.debug('Remove hover', row.attr('id'), marker.getTitle());
-   row.find('td').removeClass('hover');
-   marker.setAnimation(null);
-   marker.setIcon(BLUE_ICON);
+    log.debug('Remove hover', row.attr('id'), marker.getTitle());
+    row.find('td').removeClass('hover');
+    marker.setAnimation(null);
+    marker.setIcon(BLUE_ICON);
 }
 
 function initialize() {
@@ -57,7 +57,8 @@ function initialize() {
                 addHover(house, row, marker);
             });
         google.maps.event.addListener(marker, 'mouseout', function() {
-                removeHover(house, row, marker);
+                // work around flashing bug in Chrome with setTimeout
+                setTimeout(function() { removeHover(house, row, marker); }, 1000);
             });
         google.maps.event.addListener(marker, 'click', function() {
                 $("#apartment").attr('src', house.url);
