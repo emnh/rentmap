@@ -67,36 +67,39 @@ function initialize() {
     var updateVisible = function() {
         // filters the list of apartments by viewport bounds
         // TODO: optimize with sorted lists, binary search and merge
+        var bounds = map.getBounds();
+        if (bounds == undefined) return;
         for (var i in listings) {
             var house = listings[i];
-            var bounds = map.getBounds();
-            if (bounds == undefined) return;
-            $('#' + house.id).toggle(bounds.contains(house.marker.getPosition()));
+            // TODO: option for toggle showing apartments without proper address
+            if (house.has_location) {
+                $('#' + house.id).toggle(bounds.contains(house.marker.getPosition()));
+            }
         }
     };
  	$.storage = new $.store();
     for (var i in listings) {
         house = listings[i];
-        if (house.latlng == undefined) {
-            latlng = undefined;
-        } else {
-            latlng = new google.maps.LatLng(house.latlng.lat, house.latlng.lng);
-        }
         title = house.listing_text;
-        var marker = new google.maps.Marker({
-            icon: BLUE_ICON, 
-            position: latlng, 
-            map: map,
-            title: title
-            });
+        if (house.latlng != undefined) {
+            latlng = new google.maps.LatLng(house.latlng.lat, house.latlng.lng);
+            house.marker = new google.maps.Marker({
+                icon: BLUE_ICON, 
+                position: latlng, 
+                map: map,
+                title: title
+                });
+            house.has_location = true;
+        } else {
+            house.has_location = false;
+        }
         house.id = 'house' + i;
-        house.marker = marker;
-        if (house.duration == undefined) {
+        if (house.duration_value == undefined) {
             duration = '';
             duration_value = ''; // '' works for sorting, replace with ~double.inf?
         } else {
-            duration = house.duration.text;
-            duration_value = house.duration.value;
+            duration = house.duration_text;
+            duration_value = house.duration_value;
         }
         var score = 15*60*6000 / (duration_value * house.price);
         var house_store = $.storage.get(house.href);
@@ -134,7 +137,10 @@ function initialize() {
         trow.find('.apt_price').data('sortvalue', house.price);
         trow.find('.apt_duration').data('sortvalue', duration_value);
         trow.find('.apt_score').data('sortvalue', score);
-        bindHouseMarker(marker, trow, house);
+        if (house.has_location) {
+            var marker = house.marker;
+            bindHouseMarker(marker, trow, house);
+        }
     }
     var sortTextExtraction = function(node) {  
         return $(node).data('sortvalue');
