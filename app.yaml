@@ -9,3 +9,7 @@ handlers:
 
 - url: /.*
   script: map.py
+
+builtins:
+- datastore_admin: on
+- deferred: on

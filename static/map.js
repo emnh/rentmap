@@ -60,7 +60,7 @@ function initialize() {
                 removeHover(house, row, marker);
             });
         google.maps.event.addListener(marker, 'click', function() {
-                $("#apartment").attr('src', house.href);
+                $("#apartment").attr('src', house.url);
                 showApartment();
             });
     };
@@ -102,7 +102,7 @@ function initialize() {
             duration_value = house.duration_value;
         }
         var score = 15*60*6000 / (duration_value * house.price);
-        var house_store = $.storage.get(house.href);
+        var house_store = $.storage.get(house.url);
         if (house_store == undefined) {
             house_store = {};
             note = "";
@@ -112,7 +112,7 @@ function initialize() {
         $("#apartment_list").append('<tr class="hover_highlight" id="' + house.id + '">' + 
                 '<td class="apt_img"><img style="float: left; max-height: 4em; max-width: 60px;" id="thumb' + i + '" src="' + mapImgUrl(house) + '"></td>' +
                 '<td class="apt_created">' + house.created + '"</td>' +
-                '<td class="apt_title"><a target="_blank" class="goto_apartment" href="' + house.href + '">' + house.listing_text + '</a>' +
+                '<td class="apt_title"><a target="_blank" class="goto_apartment" href="' + house.url + '">' + house.listing_text + '</a>' +
                 '<input id="note' + i + '" value="' + note + '"></input>' +
                 '</td>' + 
                 '<td class="apt_price">' + house.price + '</td>' +
@@ -128,7 +128,7 @@ function initialize() {
         $("#note" + i).change(function(house, house_store) { 
                 return function() {
                     house_store['usernote'] = $(this).val();
-                    $.storage.set(house.href, house_store);
+                    $.storage.set(house.url, house_store);
                 }
                 }(house, house_store));
         var trow = $('#' + house.id);
