@@ -1,0 +1,23 @@
+python_preamble:
+- import: google.appengine.ext.bulkload.transform
+- import: google.appengine.ext.db
+- import: re
+- import: base64
+- import: udec
+#- import: hybel
+
+
+transformers:
+- kind: DirectionsCache
+  connector: simplexml
+  connector_options:
+    xpath_to_nodes: /root/to/node
+    style: element_centric
+  property_map:
+    - property: __key__
+      external_name: key
+      export_transform: transform.key_id_or_name_as_string
+    - property: json_content
+      external_name: json_content
+      import_transform: udec.encode
+      export_transform: udec.decode

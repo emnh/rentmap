@@ -17,7 +17,10 @@ import datetime
 import json
 import logging
 import time
-from hybel import ApartmentAd, ApartmentEncoder, updateFromHybelNo
+import app
+from hybel import ApartmentAd, \
+    ApartmentEncoder, updateFromHybelNo, \
+    DirectionsCache
 
 from pprint import pprint, pformat
 from BeautifulSoup import BeautifulSoup, NavigableString
@@ -36,6 +39,20 @@ DEV = os.environ['SERVER_SOFTWARE'].startswith('Development')
 class MainPage(webapp.RequestHandler):
     def get(self):
         self.redirect('/static/map.html')
+
+
+class DirectionsDebug(webapp.RequestHandler):
+
+    def get(self):
+        self.response.headers['Content-Type'] = 'text/plain'
+
+        for cache in DirectionsCache.all():
+            try:
+                self.response.out.write(cache.key().name().encode('utf-8'))
+            except:
+                self.response.out.write('FAIL')
+            self.response.out.write(cache.json_content)
+            self.response.out.write('\n\n')
 
 class ListingsDebug(webapp.RequestHandler):
     def get(self):
@@ -68,16 +85,25 @@ class ApartmentListings(webapp.RequestHandler):
 
 class UpdatePage(webapp.RequestHandler):
     def get(self):
-        #deferred.defer(updateFromHybelNo)
-        updateFromHybelNo()
+        deferred.defer(updateFromHybelNo)
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.out.write('Update scheduled')
+
+class EnableGeocoding(webapp.RequestHandler):
+    def get(self):
+        app.settings.geo_enabled = True
+        self.response.headers['Content-Type'] = 'text/plain'
+        self.response.out.write('Geocoding enabled')
+
+
 
 application = webapp.WSGIApplication(
                                      [('/', MainPage),
                                       ('/listings', ListingsDebug),
+                                      ('/directions_cache', DirectionsDebug),
                                       ('/listings.js', ApartmentListings),
-                                      ('/update', UpdatePage)
+                                      ('/update', UpdatePage),
+                                      ('/enable_geocoding', EnableGeocoding)
                                      ],
                                      debug=True)
 

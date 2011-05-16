@@ -18,18 +18,22 @@ import json
 import logging
 import time
 
+import app
+
 from pprint import pprint, pformat
 from BeautifulSoup import BeautifulSoup, NavigableString
 from google.appengine.ext import webapp
-#from google.appengine.ext import deferred
+from google.appengine.ext import deferred
 from google.appengine.ext import db
 from google.appengine.api import memcache
 from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import run_wsgi_app
+from google.appengine.runtime import DeadlineExceededError
 
 SIMPLE_TYPES = (int, long, float, bool, dict, basestring, list)
 DESTINATION = 'Torggata 2, Oslo'
 DEV = os.environ['SERVER_SOFTWARE'].startswith('Development')
+CITY = 'Oslo'
 
 class OverLimitException(Exception):
     pass
@@ -39,22 +43,68 @@ class ApartmentAd(db.Model):
     address_urlquoted = db.PostalAddressProperty()
     apartment_type = db.StringProperty()
     created = db.DateProperty()
-    distance_text = db.StringProperty()
-    distance_value = db.IntegerProperty()
-    duration_text = db.StringProperty()
-    duration_value = db.IntegerProperty()
     has_image = db.BooleanProperty()
     html_content = db.BlobProperty()
     image = db.LinkProperty()
-    latlng = db.GeoPtProperty()
     listing_text = db.TextProperty()
     price = db.IntegerProperty()
     url = db.LinkProperty()
 
+    # geo properties
+    latlng = db.GeoPtProperty()
+    geocode_status = db.StringProperty()
+    distance_text = db.StringProperty()
+    distance_value = db.IntegerProperty()
+    duration_text = db.StringProperty()
+    duration_value = db.IntegerProperty()
+
+    # list of remaining tasks
+    tasks = db.StringListProperty()
+
+    def addTask(self, taskname):
+        if not taskname in self.tasks:
+            self.tasks.append(taskname)
+
+    def removeTask(self, taskname):
+        if taskname in self.tasks:
+            self.tasks.remove(taskname)
+
+    def parse(self):
+        logging.info("Parsing ad with id %s" % self.key().name())
+        soup_ad = BeautifulSoup(self.html_content, convertEntities=BeautifulSoup.ALL_ENTITIES)
+        ad = HybelNoParser.parseApartmentAd(self, soup_ad)
+        #ad.dirCode(DESTINATION)
+        self.removeTask('parse')
+        self.addTask('geocode')
+        ad.put()
+
     def dirCode(self, destination_address):
-        if self.address:
-            data = GeoCoder.dirCode(self.address_urlquoted, destination_address)
+        if app.settings.geo_enabled:
+            logging.info("GeoCoding ad with id %s" % self.key().name())
+        else:
+            logging.info("GeoCoding disabled, postponing geocoding of ad with id %s" % self.key().name())
+            return
+        success = False
+        # TODO: maybe write field with direction lookup result status: 
+        # no address, no match, perhaps propagate returned lookup status
+        if self.address and self.address.strip(", \t") != '':
+            origin = self.address_urlquoted
+            # TODO: parameterize
+            if not CITY.lower() in origin.lower():
+                origin += ', ' + CITY
+
+            data = None
+            try:
+                data = GeoCoder.dirCode(origin, destination_address)
+            except OverLimitException:
+                app.settings.geo_enabled = False
+                logging.info("Geo went over limit on ad with id %s, disabling geo coding." % self.key().name())
+                self.geocode_status = 'Geo API over limit'
+                self.put()
+                return
+
             if data:
+                self.geocode_status = 'Google found no directions'
                 if len(data['routes']) > 0:
                     leg = data['routes'][0]['legs'][0]
                     self.duration_text = leg['duration']['text']
@@ -65,14 +115,16 @@ class ApartmentAd(db.Model):
                             leg['start_location']['lat'],
                             leg['start_location']['lng']
                             )
-                    return True
-        return False
+                    self.geocode_status = 'Success'
+                    success = True
+        else:
+            self.geocode_status = 'No address'
+        self.removeTask('geocode')
+        self.put()
+        return success
 
 class DirectionsCache(db.Model):
     json_content = db.BlobProperty()
-
-class AppSettings(db.Model):
-    directions_enabled = db.BooleanProperty()
 
 def modelToDict(model):
     output = {}
@@ -91,7 +143,7 @@ def modelToDict(model):
         elif isinstance(value, db.GeoPt):
             output[key] = {'lat': value.lat, 'lng': value.lon}
         elif isinstance(value, db.Model):
-            output[key] = to_dict(value)
+            output[key] = modelToDict(value)
         else:
             raise ValueError('cannot encode ' + repr(prop))
 
@@ -100,7 +152,10 @@ def modelToDict(model):
 class ApartmentEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, ApartmentAd):
-            return modelToDict(obj)
+            dict_ = modelToDict(obj)
+            del dict_['html_content']
+            del dict_['tasks']
+            return dict_
         elif hasattr(obj, 'isoformat'):
             return obj.isoformat()
         return json.JSONEncoder.default(self, obj)
@@ -110,7 +165,7 @@ class GeoCoder(object):
 
     @staticmethod
     def geocodeURL(address):
-        address = urllib.quote_plus(address.encode('utf-8'))
+        address = urllib.quo_namete_plus(address.encode('utf-8'))
         url = 'http://maps.googleapis.com/maps/api/geocode/json?address=%s&sensor=false' % address
         return url
 
@@ -206,11 +261,10 @@ class HybelNoParser(object):
         for souphouse in listings.findAll('li', 'ad-list-entry'):
             yield souphouse
 
-
-def updateFromHybelNo():
+def updateFromHybelNo(page=1):
     logging.info("Starting update from hybel.no")
     url_pattern = 'http://www.hybel.no/bolig-til-leie/annonser/oslo?side=%d'
-    url = url_pattern % 1
+    url = url_pattern % page
     data = memcache.get(url)
     if data is None:
         logging.info("Retrieving hybel page URL: %s" % url)
@@ -220,22 +274,51 @@ def updateFromHybelNo():
         memcache.add(url, data, 300)
 
     # clear
-    #for h in ApartmentAd.all():
     #    h.delete()
     #return
 
+    #for h in ApartmentAd.all():
+    #    h.tasks.append('parse')
+    #    h.put()
+
     # get only new
+    new_count = 0
+    load_next_page = True
     for soup_ad in HybelNoParser.getApartmentAds(data):
         logging.info("Processing ad with id %s" % soup_ad['id'])
-        h = ApartmentAd(key_name=soup_ad['id'])
-        h.html_content = soup_ad.renderContents()
-        h.put()
+        ap_id = soup_ad['id']
+        h = ApartmentAd.get_by_key_name(ap_id)
+        if h is None:
+            h = ApartmentAd(key_name=ap_id)
+            h.html_content = soup_ad.renderContents()
+            h.tasks.append('parse')
+            h.put()
+            new_count += 1
+        else:
+            # assume we have processed everything after first ad we have seen before, 
+            # so we can stop now
+            logging.info("Stopping at previously seen ad with id %s" % soup_ad['id'])
+            load_next_page = False
+            break
 
-    # but parse all
-    # TODO: if DEV or if UPGRADE
-    for h in ApartmentAd.all():
-        soup_ad = BeautifulSoup(h.html_content, convertEntities=BeautifulSoup.ALL_ENTITIES)
-        ad = HybelNoParser.parseApartmentAd(h, soup_ad)
-        ad.dirCode(DESTINATION)
-        ad.put()
+    if new_count > 0:
+        deferred.defer(parseAllAds)
+
+    if load_next_page and page < 1000: # extra sanity check to avoid infinite recursion
+        deferred.defer(updateFromHybelNo, page + 1)
+
+def parseAllAds():
+    try:
+        for h in ApartmentAd.all().filter("tasks =", "parse"):
+            h.parse()
+    except DeadlineExceededError:
+        deferred.defer(parseAllAds)
+    deferred.defer(geocodeAllAds)
+
+def geocodeAllAds():
+    try:
+        for h in ApartmentAd.all().filter("tasks =", "geocode"):
+            h.dirCode(DESTINATION)
+    except DeadlineExceededError:
+        deferred.defer(geocodeAllAds)
 

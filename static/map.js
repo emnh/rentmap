@@ -96,13 +96,16 @@ function initialize() {
         }
         house.id = 'house' + i;
         if (house.duration_value == undefined) {
-            duration = '';
+            duration = house.geocode_status;
             duration_value = ''; // '' works for sorting, replace with ~double.inf?
         } else {
             duration = house.duration_text;
             duration_value = house.duration_value;
         }
         var score = 15*60*6000 / (duration_value * house.price);
+        if (score == Infinity) {
+            score = 0;
+        }
         var house_store = $.storage.get(house.url);
         if (house_store == undefined) {
             house_store = {};
