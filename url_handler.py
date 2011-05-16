@@ -21,7 +21,7 @@ from django.utils import simplejson as json
 
 from hybel import ApartmentAd, \
     ApartmentEncoder, updateFromHybelNo, \
-    DirectionsCache
+    DirectionsCache, JsonListings, devReparse
 
 from pprint import pprint, pformat
 from BeautifulSoup import BeautifulSoup, NavigableString
@@ -72,17 +72,20 @@ class ApartmentListings(webapp.RequestHandler):
     def get(self):
         #self.response.headers['Content-Type'] = 'application/json'
         self.response.headers['Content-Type'] = 'text/javascript'
-
-        ads = [ad for ad in ApartmentAd.all()]
-        json = ApartmentEncoder().encode(ads)
-
         outfd = self.response.out
         outfd.write('function getListings() {\n')
         outfd.write('return ')
-        outfd.write(json)
+        outfd.write(JsonListings.get())
         outfd.write(';\n')
         outfd.write('}\n')
 
+
+class InvalidateApartmentListings(webapp.RequestHandler):
+
+    def get(self):
+        JsonListings.invalidate()
+        self.response.headers['Content-Type'] = 'text/plain'
+        self.response.out.write('Invalidated JSON cache')
 
 class UpdatePage(webapp.RequestHandler):
     def get(self):
@@ -96,13 +99,19 @@ class EnableGeocoding(webapp.RequestHandler):
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.out.write('Geocoding enabled')
 
-
+class DevReparse(webapp.RequestHandler):
+    def get(self):
+        deferred.defer(devReparse)
+        self.response.headers['Content-Type'] = 'text/plain'
+        self.response.out.write('Reparse scheduled')
 
 application = webapp.WSGIApplication(
                                      [('/', MainPage),
                                       ('/listings', ListingsDebug),
                                       ('/directions_cache', DirectionsDebug),
                                       ('/listings.js', ApartmentListings),
+                                      ('/dev_reparse', DevReparse),
+                                      ('/invalidate-listings', InvalidateApartmentListings),
                                       ('/update', UpdatePage),
                                       ('/enable_geocoding', EnableGeocoding)
                                      ],

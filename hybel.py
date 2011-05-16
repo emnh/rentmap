@@ -76,7 +76,7 @@ class ApartmentAd(db.Model):
         #ad.dirCode(DESTINATION)
         self.removeTask('parse')
         self.addTask('geocode')
-        ad.put()
+        ad.putAndInvalidateCache()
 
     def dirCode(self, destination_address):
         if app.settings.geo_enabled:
@@ -87,7 +87,7 @@ class ApartmentAd(db.Model):
         success = False
         # TODO: maybe write field with direction lookup result status: 
         # no address, no match, perhaps propagate returned lookup status
-        if self.address and self.address.strip(", \t") != '':
+        if self.address:
             origin = self.address_urlquoted
             # TODO: parameterize
             if not CITY.lower() in origin.lower():
@@ -100,7 +100,7 @@ class ApartmentAd(db.Model):
                 app.settings.geo_enabled = False
                 logging.info("Geo went over limit on ad with id %s, disabling geo coding." % self.key().name())
                 self.geocode_status = 'Geo API over limit'
-                self.put()
+                self.putAndInvalidateCache()
                 return
 
             if data:
@@ -120,8 +120,12 @@ class ApartmentAd(db.Model):
         else:
             self.geocode_status = 'No address'
         self.removeTask('geocode')
-        self.put()
+        self.putAndInvalidateCache()
         return success
+
+    def putAndInvalidateCache(self):
+        JsonListings.invalidate()
+        self.put()
 
 class DirectionsCache(db.Model):
     json_content = db.BlobProperty()
@@ -207,7 +211,6 @@ class GeoCoder(object):
             if data['status'] == 'OVER_QUERY_LIMIT':
                 msg = "Over query limit, query: %s" % url
                 logging.error(msg)
-                # TODO: add to retry queue
                 raise OverLimitException(msg)
             return data
 
@@ -226,14 +229,15 @@ class HybelNoParser(object):
     @staticmethod
     def parseAddress2(souphouse):
         addr = souphouse.find('div', 'address')
-        address = [x.strip() for x in addr if isinstance(x, NavigableString)]
-        if address[1] == '' and address[2] == '':
-            address = None
-        elif address[1] == '' and address[2] != '':
-            address = ','.join(address[0:3:2])
-        else:
-            address = ','.join(address[1:3])
-        return address
+        address = [x.strip(", \t") for x in addr if isinstance(x, NavigableString)]
+        address = [x for x in address if x != '']
+#        if address[1] == '' and address[2] == '':
+#            address = None
+#        elif address[1] == '' and address[2] != '':
+#            address = ','.join(address[0:3:2])
+#        else:
+#            address = ','.join(address[1:3])
+        return u', '.join(address)
 
     @staticmethod
     def parseApartmentAd(h, souphouse):
@@ -247,8 +251,19 @@ class HybelNoParser(object):
         h.listing_text = link.string
         h.url = HybelNoParser.BaseURL + link['href']
         h.price = int(souphouse.find('div', 'price').strong.string.replace(',-', ''))
-        h.address_urlquoted = HybelNoParser.parseAddress(souphouse)
-        h.address = urllib.unquote_plus(h.address_urlquoted)
+        address_urlquoted = HybelNoParser.parseAddress(souphouse)
+        address = urllib.unquote_plus(address_urlquoted).strip(", \t")
+        # ? address = address.decode('utf-8')
+        if not address:
+            address = HybelNoParser.parseAddress2(souphouse)
+            if address:
+                address_urlquoted = urllib.quote_plus(address.encode('utf-8'))
+        if address:
+            h.address = address
+            h.address_urlquoted = address_urlquoted
+        else:
+            del h.address
+            del h.address_urlquoted
         h.apartment_type = str(souphouse.find('div', 'house').strong.string)
         date = souphouse.find('div', 'created').string.strip()
         h.created = datetime.datetime.strptime(date, '%d.%m.%Y').date()
@@ -261,6 +276,23 @@ class HybelNoParser(object):
         for souphouse in listings.findAll('li', 'ad-list-entry'):
             yield souphouse
 
+class JsonListings(object):
+
+    cacheName = 'listings-json'
+
+    @staticmethod
+    def invalidate():
+        memcache.delete(JsonListings.cacheName)
+
+    @staticmethod
+    def get():
+        json = memcache.get(JsonListings.cacheName)
+        if json is None:
+            ads = [ad for ad in ApartmentAd.all()]
+            json = ApartmentEncoder().encode(ads)
+            memcache.set(JsonListings.cacheName, json)
+        return json
+
 def updateFromHybelNo(page=1):
     logging.info("Starting update from hybel.no")
     url_pattern = 'http://www.hybel.no/bolig-til-leie/annonser/oslo?side=%d'
@@ -272,14 +304,6 @@ def updateFromHybelNo(page=1):
         data = fd.read()
         fd.close()
         memcache.add(url, data, 300)
-
-    # clear
-    #    h.delete()
-    #return
-
-    #for h in ApartmentAd.all():
-    #    h.tasks.append('parse')
-    #    h.put()
 
     # get only new
     new_count = 0
@@ -306,6 +330,13 @@ def updateFromHybelNo(page=1):
 
     if load_next_page and page < 1000: # extra sanity check to avoid infinite recursion
         deferred.defer(updateFromHybelNo, page + 1)
+
+def devReparse():
+    for h in ApartmentAd.all():
+        if not h.address or h.address.strip(" ,\t") == '':
+            h.addTask('parse')
+            h.put()
+    deferred.defer(parseAllAds)
 
 def parseAllAds():
     try:

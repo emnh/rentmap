@@ -115,7 +115,7 @@ function initialize() {
         }
         $("#apartment_list").append('<tr class="hover_highlight" id="' + house.id + '">' + 
                 '<td class="apt_img"><img style="float: left; max-height: 4em; max-width: 60px;" id="thumb' + i + '" src="' + mapImgUrl(house) + '"></td>' +
-                '<td class="apt_created">' + house.created + '"</td>' +
+                '<td class="apt_created">' + house.created + '</td>' +
                 '<td class="apt_title"><a target="_blank" class="goto_apartment" href="' + house.url + '">' + house.listing_text + '</a>' +
                 '<input id="note' + i + '" value="' + note + '"></input>' +
                 '</td>' + 
@@ -137,6 +137,7 @@ function initialize() {
                 }(house, house_store));
         var trow = $('#' + house.id);
         trow.data('index', i);
+        trow.find('.apt_created').data('sortvalue', house.created);
         trow.find('.apt_title').data('sortvalue', house.listing_text);
         trow.find('.apt_price').data('sortvalue', house.price);
         trow.find('.apt_duration').data('sortvalue', duration_value);
