@@ -7,6 +7,10 @@ var BASEIMGURL = 'http://hybel.no';
 log4javascript.setEnabled(true);
 //log4javascript.setEnabled(false);
 
+function isNumber(n) {
+    return !isNaN(parseFloat(n)) && isFinite(n);
+}
+
 function mapImgUrl(house) {
     //return BASEIMGURL + house.image;
     return house.image;
@@ -69,12 +73,32 @@ function initialize() {
         // filters the list of apartments by viewport bounds
         // TODO: optimize with sorted lists, binary search and merge
         var bounds = map.getBounds();
+        var min_price = parseInt($('#price_min').val());
+        var max_price = parseInt($('#price_max').val());
+        var hide_imageless = $('#hide_imageless:checked').val();
+        log.debug('Min price', min_price);
+        log.debug('Max price', max_price);
+        log.debug('Hide ', hide_imageless);
         if (bounds == undefined) return;
         for (var i in listings) {
             var house = listings[i];
             // TODO: option for toggle showing apartments without proper address
+            var visible = true;
             if (house.has_location) {
-                $('#' + house.id).toggle(bounds.contains(house.marker.getPosition()));
+                visible = visible && bounds.contains(house.marker.getPosition());
+            }
+            if (isNumber(min_price)) {
+                visible = visible && (house.price >= min_price);
+            }
+            if (isNumber(max_price)) {
+                visible = visible && (house.price <= max_price);
+            }
+            if (hide_imageless) {
+                visible = visible && house.has_image;
+            }
+            $('#' + house.id).toggle(visible);
+            if (house.has_location) {
+                house.marker.setVisible(visible);
             }
         }
     };
@@ -169,6 +193,10 @@ function initialize() {
     );
     updateVisible();
     google.maps.event.addListener(map, 'bounds_changed', updateVisible);
+    $('#price_min').keyup(updateVisible);
+    $('#price_max').keyup(updateVisible);
+    $('#hide_imageless').change(updateVisible);
+
     $("#apartment").hide();
     $("#apartment_link").click(showApartment);
     $("#apartment_list_link").click(function() {

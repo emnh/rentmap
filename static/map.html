@@ -30,8 +30,22 @@
           <a id="apartment_link" href="#apartment">Apartment</a>
           <a id="apartment_list_link" href="#apartment_list">Apartment list</a>
       </div>
-      <div id="map_canvas" style="padding: 5%; width: 95%; height: 45%;"></div>
-      <img id="apt_img" style="height: 35%;"></img>
+      <div id="map_canvas" style="border: 5px solid white; padding: 5%; width: 95%; height: 45%;"></div>
+      <div style="height: 35%; width: 95%;">
+          <div id="apartment_filters" style="width: 25%; float: left;">
+              <label for="price_min" >Min price</label>
+              <input type="text" id="price_min" />
+              <br/>
+              <label for="price_max" />Max price</label>
+              <input type="text" id="price_max" />
+              <br/>
+              <label for="hide_imageless" />Has image</label>
+              <input type="checkbox" id="hide_imageless" checked/>
+          </div>
+          <div>
+              <img id="apt_img" style="height: 100%; width: 75%;"></img>
+          </div>
+      </div>
   </div>
   <div style='position: absolute; left: 55%; top: 0; width: 45%; height: 100%;'>
       <iframe id="apartment" style='width: 100%; height: 100%;'></iframe>

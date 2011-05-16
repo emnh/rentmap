@@ -34,6 +34,7 @@ SIMPLE_TYPES = (int, long, float, bool, dict, basestring, list)
 DESTINATION = 'Torggata 2, Oslo'
 DEV = os.environ['SERVER_SOFTWARE'].startswith('Development')
 CITY = 'Oslo'
+ADDRESS_WHITESPACE = '\t\r\n ,'
 
 class OverLimitException(Exception):
     pass
@@ -229,7 +230,7 @@ class HybelNoParser(object):
     @staticmethod
     def parseAddress2(souphouse):
         addr = souphouse.find('div', 'address')
-        address = [x.strip(", \t") for x in addr if isinstance(x, NavigableString)]
+        address = [x.strip(ADDRESS_WHITESPACE) for x in addr if isinstance(x, NavigableString)]
         address = [x for x in address if x != '']
 #        if address[1] == '' and address[2] == '':
 #            address = None
@@ -252,7 +253,7 @@ class HybelNoParser(object):
         h.url = HybelNoParser.BaseURL + link['href']
         h.price = int(souphouse.find('div', 'price').strong.string.replace(',-', ''))
         address_urlquoted = HybelNoParser.parseAddress(souphouse)
-        address = urllib.unquote_plus(address_urlquoted).strip(", \t")
+        address = urllib.unquote_plus(address_urlquoted).strip(ADDRESS_WHITESPACE)
         # ? address = address.decode('utf-8')
         if not address:
             address = HybelNoParser.parseAddress2(souphouse)
@@ -333,7 +334,7 @@ def updateFromHybelNo(page=1):
 
 def devReparse():
     for h in ApartmentAd.all():
-        if not h.address or h.address.strip(" ,\t") == '':
+        if not h.address or h.address.strip(ADDRESS_WHITESPACE) == '':
             h.addTask('parse')
             h.put()
     deferred.defer(parseAllAds)
