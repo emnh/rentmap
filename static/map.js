@@ -4,8 +4,8 @@ var GREEN_ICON = 'http://www.google.com/intl/en_us/mapfiles/ms/micons/green-dot.
 var TARGET_LOCATION = [59.9135469, 10.7467214];
 var BASEIMGURL = 'http://hybel.no';
 
-log4javascript.setEnabled(true);
-//log4javascript.setEnabled(false);
+//log4javascript.setEnabled(true);
+log4javascript.setEnabled(false);
 
 function isNumber(n) {
     return !isNaN(parseFloat(n)) && isFinite(n);
@@ -76,9 +76,11 @@ function initialize() {
         var min_price = parseInt($('#price_min').val());
         var max_price = parseInt($('#price_max').val());
         var hide_imageless = $('#hide_imageless:checked').val();
+        /*
         log.debug('Min price', min_price);
         log.debug('Max price', max_price);
         log.debug('Hide ', hide_imageless);
+        */
         if (bounds == undefined) return;
         for (var i in listings) {
             var house = listings[i];
