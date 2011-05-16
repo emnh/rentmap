@@ -12,12 +12,13 @@ import sys
 import re
 import urllib
 import urllib2
-import parse
 import datetime
-import json
 import logging
 import time
 import app
+
+from django.utils import simplejson as json
+
 from hybel import ApartmentAd, \
     ApartmentEncoder, updateFromHybelNo, \
     DirectionsCache

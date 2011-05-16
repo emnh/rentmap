@@ -12,13 +12,13 @@ import sys
 import re
 import urllib
 import urllib2
-import parse
 import datetime
-import json
 import logging
 import time
 
 import app
+
+from django.utils import simplejson as json
 
 from pprint import pprint, pformat
 from BeautifulSoup import BeautifulSoup, NavigableString

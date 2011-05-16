@@ -1,0 +1,7 @@
+cron:
+- description: reenable geo-coding API for hybel.no scrape update
+  url: /enable_geocoding
+  schedule: every 24 hours
+- description: hybel.no scrape update
+  url: /update
+  schedule: every 1 hours

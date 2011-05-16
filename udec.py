@@ -10,9 +10,11 @@
 import os
 import sys
 import re
+from google.appengine.api import datastore_types
 
 def encode(x):
-    return x.encode('utf-8')
+    value = x.encode('utf-8')
+    return datastore_types.Blob(value)
 
 def decode(x):
     return x.decode('utf-8')
