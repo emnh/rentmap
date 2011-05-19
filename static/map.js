@@ -121,7 +121,7 @@ function initialize() {
             house.has_location = false;
         }
         house.id = 'house' + i;
-        if (house.duration_value == undefined) {
+        if (house.duration_value == undefined || house.duration_value == null) {
             duration = house.geocode_status;
             duration_value = ''; // '' works for sorting, replace with ~double.inf?
         } else {

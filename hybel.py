@@ -316,7 +316,7 @@ def updateFromHybelNo(page=1):
         if h is None:
             h = ApartmentAd(key_name=ap_id)
             h.html_content = soup_ad.renderContents()
-            h.tasks.append('parse')
+            h.addTask('parse')
             h.put()
             new_count += 1
         else:
