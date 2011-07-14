@@ -77,7 +77,7 @@ class ApartmentAd(db.Model):
         #ad.dirCode(DESTINATION)
         self.removeTask('parse')
         self.addTask('geocode')
-        ad.putAndInvalidateCache()
+        self.putAndInvalidateCache()
 
     def dirCode(self, destination_address):
         if app.settings.geo_enabled:
@@ -287,9 +287,16 @@ class JsonListings(object):
 
     @staticmethod
     def get():
-        json = memcache.get(JsonListings.cacheName)
+        #json = memcache.get(JsonListings.cacheName)
+        json = None
         if json is None:
-            ads = [ad for ad in ApartmentAd.all()]
+            # TODO: maybe a flag for finished parsing
+            cutoff_date = datetime.datetime.now() - datetime.timedelta(30)
+            #today = datetime.datetime.strptime(today, '%d.%m.%Y').date()
+            ads = [ad for ad in ApartmentAd.all().
+                    filter('created !=', None).
+                    filter('created > ', cutoff_date)
+                    ]
             json = ApartmentEncoder().encode(ads)
             memcache.set(JsonListings.cacheName, json)
         return json
@@ -323,8 +330,9 @@ def updateFromHybelNo(page=1):
             # assume we have processed everything after first ad we have seen before, 
             # so we can stop now
             logging.info("Stopping at previously seen ad with id %s" % soup_ad['id'])
-            load_next_page = False
-            break
+            if page > 9:
+                load_next_page = False
+                break
 
     if new_count > 0:
         deferred.defer(parseAllAds)
